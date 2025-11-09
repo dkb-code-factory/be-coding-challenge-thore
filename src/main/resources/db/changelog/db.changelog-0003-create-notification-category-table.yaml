@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: "0003-create-notification-category-table"
+      author: "migration"
+      changes:
+        - createTable:
+            tableName: "notification_category"
+            columns:
+              - column:
+                  name: "user_id"
+                  type: "uuid"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: "category"
+                  type: "varchar(50)"
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: "notification_category"
+            columnNames: "user_id, category"
+            constraintName: "pk_notification_category"
+        - addForeignKeyConstraint:
+            baseTableName: "notification_category"
+            baseColumnNames: "user_id"
+            constraintName: "fk_notification_category_user_id"
+            referencedTableName: "users"
+            referencedColumnNames: "id"
+            onDelete: "CASCADE"
+        - createIndex:
+            tableName: "notification_category"
+            indexName: "idx_notification_category_user_id"
+            columns:
+              - column:
+                  name: "user_id"
+      rollback:
+        - dropTable:
+            tableName: "notification_category"

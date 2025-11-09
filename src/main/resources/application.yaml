@@ -11,4 +11,7 @@ spring:
     change-log: classpath:db/changelog/db.changelog-main.yaml
 logging:
   level:
-   org.hibernate.SQL: DEBUG
+    root: ERROR
+    de.dkb.api: INFO
+    org.hibernate.SQL: DEBUG
+    org.springframework: INFO

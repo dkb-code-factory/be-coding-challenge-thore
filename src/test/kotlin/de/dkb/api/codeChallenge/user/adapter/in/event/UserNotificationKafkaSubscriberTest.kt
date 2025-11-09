@@ -1,8 +1,10 @@
 package de.dkb.api.codeChallenge.user.adapter.`in`.event
 
-import de.dkb.api.codeChallenge.user.adapter.`in`.api.NotificationType
-import de.dkb.api.codeChallenge.user.adapter.`in`.api.NotifyUserRequest
-import de.dkb.api.codeChallenge.user.domain.User
+import arrow.core.left
+import arrow.core.right
+import de.dkb.api.codeChallenge.user.adapter.`in`.event.dto.NotificationType
+import de.dkb.api.codeChallenge.user.adapter.`in`.event.dto.UserNotificationMessage
+import de.dkb.api.codeChallenge.user.domain.NotificationType as DomainNotificationType
 import de.dkb.api.codeChallenge.user.service.UserService
 import io.mockk.every
 import io.mockk.mockk
@@ -20,19 +22,19 @@ class UserNotificationKafkaSubscriberTest {
         val userId = UUID.randomUUID()
         val notificationType = NotificationType.TYPE_1
         val message = "Test notification message"
-        val request = NotifyUserRequest(
+        val kafkaMessage = UserNotificationMessage(
             userId = userId,
             notificationType = notificationType,
             message = message
         )
-        every { userService.sendNotification(userId, User.NotificationType.TYPE_1, message) } returns Unit
+        every { userService.sendNotification(userId, DomainNotificationType.TYPE_1, message) } returns Unit.right()
 
         // When
-        subject.consumeNotification(request)
+        subject.consumeNotification(kafkaMessage)
 
         // Then
         verify(exactly = 1) { 
-            userService.sendNotification(userId, User.NotificationType.TYPE_1, message) 
+            userService.sendNotification(userId, DomainNotificationType.TYPE_1, message) 
         }
     }
 
@@ -42,19 +44,19 @@ class UserNotificationKafkaSubscriberTest {
         val userId = UUID.randomUUID()
         val notificationType = NotificationType.TYPE_2
         val message = "Another test message"
-        val request = NotifyUserRequest(
+        val kafkaMessage = UserNotificationMessage(
             userId = userId,
             notificationType = notificationType,
             message = message
         )
-        every { userService.sendNotification(userId, User.NotificationType.TYPE_2, message) } returns Unit
+        every { userService.sendNotification(userId, DomainNotificationType.TYPE_2, message) } returns Unit.right()
 
         // When
-        subject.consumeNotification(request)
+        subject.consumeNotification(kafkaMessage)
 
         // Then
         verify(exactly = 1) { 
-            userService.sendNotification(userId, User.NotificationType.TYPE_2, message) 
+            userService.sendNotification(userId, DomainNotificationType.TYPE_2, message) 
         }
     }
 
@@ -64,19 +66,42 @@ class UserNotificationKafkaSubscriberTest {
         val userId = UUID.randomUUID()
         val notificationType = NotificationType.TYPE_5
         val message = "Type 5 notification"
-        val request = NotifyUserRequest(
+        val kafkaMessage = UserNotificationMessage(
             userId = userId,
             notificationType = notificationType,
             message = message
         )
-        every { userService.sendNotification(userId, User.NotificationType.TYPE_5, message) } returns Unit
+        every { userService.sendNotification(userId, DomainNotificationType.TYPE_5, message) } returns Unit.right()
 
         // When
-        subject.consumeNotification(request)
+        subject.consumeNotification(kafkaMessage)
 
         // Then
         verify(exactly = 1) { 
-            userService.sendNotification(userId, User.NotificationType.TYPE_5, message) 
+            userService.sendNotification(userId, DomainNotificationType.TYPE_5, message) 
+        }
+    }
+
+    @Test
+    fun `consumeNotification - given user not found - when consuming - then error is logged`() {
+        // Given
+        val userId = UUID.randomUUID()
+        val notificationType = NotificationType.TYPE_1
+        val message = "Test message"
+        val kafkaMessage = UserNotificationMessage(
+            userId = userId,
+            notificationType = notificationType,
+            message = message
+        )
+        every { userService.sendNotification(userId, DomainNotificationType.TYPE_1, message) } returns 
+            UserService.Error.UserNotFound(userId).left()
+
+        // When
+        subject.consumeNotification(kafkaMessage)
+
+        // Then
+        verify(exactly = 1) { 
+            userService.sendNotification(userId, DomainNotificationType.TYPE_1, message) 
         }
     }
 }

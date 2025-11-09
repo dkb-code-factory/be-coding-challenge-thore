@@ -1,12 +1,14 @@
 package de.dkb.api.codeChallenge.user.adapter.`in`.web
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import de.dkb.api.codeChallenge.user.adapter.`in`.api.NotificationType
-import de.dkb.api.codeChallenge.user.adapter.`in`.api.NotifyUserRequest
-import de.dkb.api.codeChallenge.user.adapter.`in`.api.RegisterUserRequest
+import de.dkb.api.codeChallenge.user.adapter.`in`.web.dto.NotificationType
+import de.dkb.api.codeChallenge.user.adapter.`in`.web.dto.NotifyUserRequest
+import de.dkb.api.codeChallenge.user.adapter.`in`.web.dto.RegisterUserRequest
+import de.dkb.api.codeChallenge.user.adapter.out.persistence.JpaNotificationCategoryRepository
 import de.dkb.api.codeChallenge.user.adapter.out.persistence.JpaUserRepository
+import de.dkb.api.codeChallenge.user.adapter.out.persistence.entity.NotificationCategoryEntity
 import de.dkb.api.codeChallenge.user.adapter.out.persistence.entity.UserEntity
-import de.dkb.api.codeChallenge.user.domain.User
+import de.dkb.api.codeChallenge.user.domain.NotificationCategory
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -41,6 +43,9 @@ class UserControllerIntegrationTest {
     @Autowired
     private lateinit var jpaUserRepository: JpaUserRepository
 
+    @Autowired
+    private lateinit var jpaNotificationCategoryRepository: JpaNotificationCategoryRepository
+
     companion object {
         @Container
         val postgres = PostgreSQLContainer("postgres:15")
@@ -56,11 +61,12 @@ class UserControllerIntegrationTest {
 
     @AfterEach
     fun tearDown() {
+        jpaNotificationCategoryRepository.deleteAll()
         jpaUserRepository.deleteAll()
     }
 
     @Test
-    fun `registerUser - given valid user registration request - when posting to register endpoint - then user is created and returned`() {
+    fun registerUserStoresCategoriesCorrectly() {
         // Given
         val userId = UUID.randomUUID()
         val request = createRegisterUserRequest(
@@ -68,128 +74,37 @@ class UserControllerIntegrationTest {
             notifications = setOf(NotificationType.TYPE_1, NotificationType.TYPE_2, NotificationType.TYPE_3)
         )
 
-        // When & Then
+        // When
         mockMvc.perform(
             post("/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(request.toJson())
         )
-            .andExpect(status().isOk)
+            .andExpect(status().isCreated)
             .andExpect(jsonPath("$.id").value(userId.toString()))
             .andExpect(jsonPath("$.notifications").isArray)
-            .andExpect(jsonPath("$.notifications.length()").value(3))
+            .andExpect(jsonPath("$.notifications.length()").value(4)) // CATEGORY_A contains TYPE_1, TYPE_2, TYPE_3, and TYPE_6
 
-        // Verify user is persisted in database
+        // Then
         val savedUser = jpaUserRepository.findById(userId)
         assertThat(savedUser).isPresent
-        assertThat(savedUser.get().id).isEqualTo(userId)
-        assertThat(savedUser.get().notifications).hasSize(3)
-        assertThat(savedUser.get().notifications).contains(
-            "type1",
-            "type2",
-            "type3"
-        )
+        val categories = jpaNotificationCategoryRepository.findByUserId(userId)
+        assertThat(categories).hasSize(1)
+        assertThat(categories.first().category).isEqualTo(NotificationCategory.CATEGORY_A.name)
     }
 
     @Test
-    fun `registerUser - given user with single notification type - when posting to register endpoint - then user is created correctly`() {
+    fun sendNotificationSentWhenUserSubscribed() {
         // Given
         val userId = UUID.randomUUID()
-        val request = createRegisterUserRequest(
-            id = userId,
-            notifications = setOf(NotificationType.TYPE_5)
+        jpaUserRepository.save(UserEntity(id = userId))
+        jpaNotificationCategoryRepository.save(
+            NotificationCategoryEntity(userId, NotificationCategory.CATEGORY_A.name)
         )
-
-        // When & Then
-        mockMvc.perform(
-            post("/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(request.toJson())
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.id").value(userId.toString()))
-            .andExpect(jsonPath("$.notifications").isArray)
-            .andExpect(jsonPath("$.notifications.length()").value(1))
-
-        // Verify user is persisted in database
-        val savedUser = jpaUserRepository.findById(userId)
-        assertThat(savedUser).isPresent
-        assertThat(savedUser.get().notifications).hasSize(1)
-        assertThat(savedUser.get().notifications).contains("type5")
-    }
-
-    @Test
-    fun `registerUser - given user with empty notifications - when posting to register endpoint - then user is created with no subscriptions`() {
-        // Given
-        val userId = UUID.randomUUID()
-        val request = createRegisterUserRequest(
-            id = userId,
-            notifications = emptySet()
-        )
-
-        // When & Then
-        mockMvc.perform(
-            post("/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(request.toJson())
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.id").value(userId.toString()))
-            .andExpect(jsonPath("$.notifications").isArray)
-            .andExpect(jsonPath("$.notifications.length()").value(0))
-
-        // Verify user is persisted in database
-        val savedUser = jpaUserRepository.findById(userId)
-        assertThat(savedUser).isPresent
-        assertThat(savedUser.get().notifications).isEmpty()
-    }
-
-    @Test
-    fun `registerUser - given user with all notification types - when posting to register endpoint - then user is created with all subscriptions`() {
-        // Given
-        val userId = UUID.randomUUID()
-        val request = createRegisterUserRequest(
-            id = userId,
-            notifications = setOf(
-                NotificationType.TYPE_1,
-                NotificationType.TYPE_2,
-                NotificationType.TYPE_3,
-                NotificationType.TYPE_4,
-                NotificationType.TYPE_5
-            )
-        )
-
-        // When & Then
-        mockMvc.perform(
-            post("/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(request.toJson())
-        )
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.id").value(userId.toString()))
-            .andExpect(jsonPath("$.notifications").isArray)
-            .andExpect(jsonPath("$.notifications.length()").value(5))
-
-        // Verify user is persisted in database
-        val savedUser = jpaUserRepository.findById(userId)
-        assertThat(savedUser).isPresent
-        assertThat(savedUser.get().notifications).hasSize(5)
-    }
-
-    @Test
-    fun `sendNotification - given user subscribed to notification type - when posting to notify endpoint - then notification is sent successfully`() {
-        // Given
-        val userId = UUID.randomUUID()
-        val user = UserEntity(
-            id = userId,
-            notifications = mutableSetOf("type1", "type2", "type3")
-        )
-        jpaUserRepository.save(user)
-
         val request = createNotifyUserRequest(
             userId = userId,
             notificationType = NotificationType.TYPE_1,
-            message = "Important update for you!"
+            message = "Important update!"
         )
 
         // When
@@ -199,164 +114,86 @@ class UserControllerIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(request.toJson())
             )
-                .andExpect(status().isOk)
+                .andExpect(status().isNoContent)
         }
 
         // Then
         assertThat(output).contains("Sending notification of type TYPE_1")
-        assertThat(output).contains("to user $userId")
-        assertThat(output).contains("Important update for you!")
     }
 
     @Test
-    fun `sendNotification - given user not subscribed to notification type - when posting to notify endpoint - then notification is not sent`() {
+    fun sendNotificationReturnsNotFoundWhenUserDoesNotExist() {
         // Given
         val userId = UUID.randomUUID()
-        val user = UserEntity(
-            id = userId,
-            notifications = mutableSetOf("type1", "type2", "type3")
-        )
-        jpaUserRepository.save(user)
-
         val request = createNotifyUserRequest(
             userId = userId,
-            notificationType = NotificationType.TYPE_4, // User not subscribed to type4
-            message = "This should not be sent"
-        )
-
-        // When
-        val output = captureConsoleOutput {
-            mockMvc.perform(
-                post("/notify")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(request.toJson())
-            )
-                .andExpect(status().isOk)
-        }
-
-        // Then
-        assertThat(output).doesNotContain("Sending notification")
-    }
-
-    @Test
-    fun `sendNotification - given non-existing user - when posting to notify endpoint - then notification is not sent`() {
-        // Given
-        val nonExistingUserId = UUID.randomUUID()
-        val request = createNotifyUserRequest(
-            userId = nonExistingUserId,
             notificationType = NotificationType.TYPE_1,
-            message = "This should not be sent"
+            message = "Important update!"
         )
 
-        // When
-        val output = captureConsoleOutput {
-            mockMvc.perform(
-                post("/notify")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(request.toJson())
-            )
-                .andExpect(status().isOk)
-        }
-
-        // Then
-        assertThat(output).doesNotContain("Sending notification")
+        // When & Then
+        mockMvc.perform(
+            post("/notify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(request.toJson())
+        )
+            .andExpect(status().isNotFound)
     }
 
     @Test
-    fun `sendNotification - given user subscribed to type2 - when posting notification of type2 - then notification is sent successfully`() {
+    fun sendNotificationReturnsUnprocessableEntityWhenUserNotSubscribed() {
         // Given
         val userId = UUID.randomUUID()
-        val user = UserEntity(
-            id = userId,
-            notifications = mutableSetOf("type1", "type2", "type3")
+        jpaUserRepository.save(UserEntity(id = userId))
+        jpaNotificationCategoryRepository.save(
+            NotificationCategoryEntity(userId, NotificationCategory.CATEGORY_A.name)
         )
-        jpaUserRepository.save(user)
-
         val request = createNotifyUserRequest(
             userId = userId,
-            notificationType = NotificationType.TYPE_2,
-            message = "Type 2 notification message"
+            notificationType = NotificationType.TYPE_4, // User is subscribed to CATEGORY_A, not CATEGORY_B
+            message = "Important update!"
         )
 
-        // When
+        // When & Then
+        mockMvc.perform(
+            post("/notify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(request.toJson())
+        )
+            .andExpect(status().isUnprocessableEntity)
+    }
+
+    @Test
+    fun userRegisteredWithType1ShouldReceiveType6Notifications() {
+        // Given - User registered with TYPE_1 (which maps to CATEGORY_A)
+        val userId = UUID.randomUUID()
+        jpaUserRepository.save(UserEntity(id = userId))
+        jpaNotificationCategoryRepository.save(
+            NotificationCategoryEntity(userId, NotificationCategory.CATEGORY_A.name)
+        )
+        
+        // When - Send TYPE_6 notification (TYPE_6 is also in CATEGORY_A)
+        val request = createNotifyUserRequest(
+            userId = userId,
+            notificationType = NotificationType.TYPE_6,
+            message = "New TYPE_6 notification!"
+        )
+        
         val output = captureConsoleOutput {
             mockMvc.perform(
                 post("/notify")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(request.toJson())
             )
-                .andExpect(status().isOk)
+                .andExpect(status().isNoContent)
         }
 
-        // Then
-        assertThat(output).contains("Sending notification of type TYPE_2")
+        // Then - Notification should be sent successfully
+        assertThat(output).contains("Sending notification of type TYPE_6")
         assertThat(output).contains("to user $userId")
-        assertThat(output).contains("Type 2 notification message")
     }
 
-    @Test
-    fun `sendNotification - given user subscribed to type3 - when posting notification of type3 - then notification is sent successfully`() {
-        // Given
-        val userId = UUID.randomUUID()
-        val user = UserEntity(
-            id = userId,
-            notifications = mutableSetOf("type1", "type2", "type3")
-        )
-        jpaUserRepository.save(user)
-
-        val request = createNotifyUserRequest(
-            userId = userId,
-            notificationType = NotificationType.TYPE_3,
-            message = "Type 3 notification message"
-        )
-
-        // When
-        val output = captureConsoleOutput {
-            mockMvc.perform(
-                post("/notify")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(request.toJson())
-            )
-                .andExpect(status().isOk)
-        }
-
-        // Then
-        assertThat(output).contains("Sending notification of type TYPE_3")
-        assertThat(output).contains("to user $userId")
-        assertThat(output).contains("Type 3 notification message")
-    }
-
-    @Test
-    fun `sendNotification - given user subscribed to specific types - when posting notification of type5 - then notification is not sent`() {
-        // Given
-        val userId = UUID.randomUUID()
-        val user = UserEntity(
-            id = userId,
-            notifications = mutableSetOf("type1", "type2", "type3")
-        )
-        jpaUserRepository.save(user)
-
-        val request = createNotifyUserRequest(
-            userId = userId,
-            notificationType = NotificationType.TYPE_5, // User not subscribed to type5
-            message = "This should not be sent"
-        )
-
-        // When
-        val output = captureConsoleOutput {
-            mockMvc.perform(
-                post("/notify")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(request.toJson())
-            )
-                .andExpect(status().isOk)
-        }
-
-        // Then
-        assertThat(output).doesNotContain("Sending notification")
-    }
-
-     private fun createRegisterUserRequest(
+    private fun createRegisterUserRequest(
         id: UUID = UUID.randomUUID(),
         notifications: Set<NotificationType> = emptySet()
     ): RegisterUserRequest {

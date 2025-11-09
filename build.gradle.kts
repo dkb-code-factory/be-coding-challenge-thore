@@ -25,11 +25,13 @@ dependencies {
 	// Core Kotlin dependencies
 	implementation("org.jetbrains.kotlin:kotlin-stdlib")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
+	implementation("io.arrow-kt:arrow-core:1.2.4")
 
 	// Spring Boot dependencies
 	implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.kafka:spring-kafka")
 
 	// JSON serialization/deserialization

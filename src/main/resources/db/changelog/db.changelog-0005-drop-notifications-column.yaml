@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: "0005-drop-notifications-column"
+      author: "migration"
+      changes:
+        - dropColumn:
+            tableName: "users"
+            columnName: "notifications"
+      rollback:
+        - addColumn:
+            tableName: "users"
+            columns:
+              - column:
+                  name: "notifications"
+                  type: "varchar(255)"
+                  defaultValue: ""

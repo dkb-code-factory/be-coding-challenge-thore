@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: "0004-migrate-notifications-to-categories"
+      author: "migration"
+      changes:
+        # Insert CATEGORY_A for users with type1, type2, type3, or type6
+        - sql:
+            sql: |
+              INSERT INTO notification_category (user_id, category)
+              SELECT DISTINCT u.id, 'CATEGORY_A'
+              FROM users u
+              WHERE u.notifications ~ '(^|;)(type1|type2|type3|type6)(;|$)'
+              ON CONFLICT DO NOTHING;
+        
+        # Insert CATEGORY_B for users with type4 or type5
+        - sql:
+            sql: |
+              INSERT INTO notification_category (user_id, category)
+              SELECT DISTINCT u.id, 'CATEGORY_B'
+              FROM users u
+              WHERE u.notifications ~ '(^|;)(type4|type5)(;|$)'
+              ON CONFLICT DO NOTHING;
+      rollback:
+        - sql:
+            sql: "DELETE FROM notification_category;"
