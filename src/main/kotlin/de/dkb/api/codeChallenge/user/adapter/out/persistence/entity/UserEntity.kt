@@ -1,4 +1,4 @@
-package de.dkb.api.codeChallenge.notification.model
+package de.dkb.api.codeChallenge.user.adapter.out.persistence.entity
 
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
@@ -10,13 +10,13 @@ import org.jetbrains.annotations.NotNull
 
 @Entity
 @Table(name = "users")
-data class User(
+data class UserEntity(
     @Id
     @Column(columnDefinition = "uuid")
     val id: UUID,
     @field:NotNull
-    @Convert(converter = NotificationTypeSetConverter::class)
-    var notifications: MutableSet<NotificationType> = mutableSetOf(),
+    @Convert(converter = NotificationStringSetConverter::class)
+    var notifications: MutableSet<String> = mutableSetOf(),
 ) {
     // Default constructor for Hibernate
     constructor() : this(UUID.randomUUID(), mutableSetOf())
